@@ -81,3 +81,7 @@ void open_file();
 Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3 &orient);
 void reset_cov(Eigen::Matrix<double, 24, 24> & P_init);
 void reset_cov_output(Eigen::Matrix<double, 30, 30> & P_init_output);
+
+extern vector<double>  gt_extrinT, gt_extrinR;
+extern V3D gt_T_wrt_IMU;
+extern M3D gt_R_wrt_IMU;

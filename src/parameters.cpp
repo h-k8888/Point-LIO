@@ -119,6 +119,12 @@ void readParameters(ros::NodeHandle &nh)
     ivox_options_.nearby_type_ = IVoxType::NearbyType::NEARBY18;
   }
     p_imu->gravity_ << VEC_FROM_ARRAY(gravity);
+
+    // for ground truth target
+    nh.param<vector<double>>("ground_truth/extrinsic_T", gt_extrinT, vector<double>());
+    nh.param<vector<double>>("ground_truth/extrinsic_R", gt_extrinR, vector<double>());
+    gt_T_wrt_IMU<<VEC_FROM_ARRAY(gt_extrinT);
+    gt_R_wrt_IMU<<MAT_FROM_ARRAY(gt_extrinR);
 }
 
 Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3 &rot) 

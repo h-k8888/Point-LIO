@@ -46,11 +46,41 @@ nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
 geometry_msgs::PoseStamped msg_body_pose;
 
+vector<double>       gt_extrinT(3, 0.0);
+vector<double>       gt_extrinR(9, 0.0);
+V3D gt_T_wrt_IMU(Zero3d);
+M3D gt_R_wrt_IMU(Eye3d);
+string pose_target_file = "/tmp/target_path.txt";
+nav_msgs::Path path_target_end;
+geometry_msgs::PoseStamped msg_target_pose;
+
 void SigHandle(int sig)
 {
     flg_exit = true;
     ROS_WARN("catch sig %d", sig);
     sig_buffer.notify_all();
+}
+
+
+void saveTraj()
+{
+    printf("\n..............Saving path................\n");
+    printf("path file: %s\n", pose_target_file.c_str());
+    ofstream of_beg(pose_target_file);
+    of_beg.setf(ios::fixed, ios::floatfield);
+    of_beg.precision(12);
+
+    for (int i = 0; i < path_target_end.poses.size(); ++i) {
+        of_beg<< path_target_end.poses[i].header.stamp.toSec()<< " "
+              <<path_target_end.poses[i].pose.position.x<< " "
+              <<path_target_end.poses[i].pose.position.y<< " "
+              <<path_target_end.poses[i].pose.position.z<< " "
+              <<path_target_end.poses[i].pose.orientation.x<< " "
+              <<path_target_end.poses[i].pose.orientation.y<< " "
+              <<path_target_end.poses[i].pose.orientation.z<< " "
+              <<path_target_end.poses[i].pose.orientation.w<< "\n";
+    }
+    of_beg.close();
 }
 
 inline void dump_lio_state_to_log(FILE *fp)  
@@ -311,6 +341,55 @@ void publish_path(const ros::Publisher pubPath)
         path.poses.emplace_back(msg_body_pose);
         pubPath.publish(path);
     }
+
+    {
+        vect3 state_pos;
+        SO3 state_rot;
+        if (!use_imu_as_input)
+        {
+            state_pos << kf_output.x_.pos(0), kf_output.x_.pos(1), kf_output.x_.pos(2);
+//            out.position.y = kf_output.x_.pos(1);
+//            out.position.z = kf_output.x_.pos(2);
+            SO3 q(kf_output.x_.rot);
+            state_rot = q;
+//            out.orientation.x = q.coeffs()[0];
+//            out.orientation.y = q.coeffs()[1];
+//            out.orientation.z = q.coeffs()[2];
+//            out.orientation.w = q.coeffs()[3];
+        }
+        else
+        {
+            state_pos << kf_input.x_.pos(0), kf_input.x_.pos(1), kf_input.x_.pos(2);
+//            out.position.x = kf_input.x_.pos(0);
+//            out.position.y = kf_input.x_.pos(1);
+//            out.position.z = kf_input.x_.pos(2);
+            SO3 q(kf_input.x_.rot);
+            state_rot = q;
+//            out.orientation.x = q.coeffs()[0];
+//            out.orientation.y = q.coeffs()[1];
+//            out.orientation.z = q.coeffs()[2];
+//            out.orientation.w = q.coeffs()[3];
+        }
+//        vect3 state_pos;
+//        state_pos << msg_body_pose.pose.position.x, msg_body_pose.pose.position.y, msg_body_pose.pose.position.z;
+//        SO3 state_rot;
+//        state_rot << msg_body_pose.pose.orientation.w, msg_body_pose.pose.orientation.x, msg_body_pose.pose.orientation.y, msg_body_pose.pose.orientation.z;
+//        ROS_WARN("state_rot w %f, %f", state_rot.w(), msg_body_pose.pose.orientation.w);
+        vect3 pos_target = state_pos + state_rot * gt_T_wrt_IMU;
+        Eigen::Quaterniond quat_target(state_rot * gt_R_wrt_IMU);
+
+        msg_target_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
+        msg_target_pose.header.frame_id = "camera_init";
+        msg_target_pose.pose.position.x = pos_target(0);
+        msg_target_pose.pose.position.y = pos_target(1);
+        msg_target_pose.pose.position.z = pos_target(2);
+        msg_target_pose.pose.orientation.x = quat_target.x();
+        msg_target_pose.pose.orientation.y = quat_target.y();
+        msg_target_pose.pose.orientation.z = quat_target.z();
+        msg_target_pose.pose.orientation.w = quat_target.w();
+        path_target_end.poses.push_back(msg_target_pose);
+    }
+//    path_target_end.poses.emplace_back(msg_body_pose);
 }        
 
 int main(int argc, char** argv)
@@ -369,6 +448,10 @@ int main(int argc, char** argv)
     string pos_log_dir = root_dir + "/Log/pos_log.txt";
     fp = fopen(pos_log_dir.c_str(),"w");
     open_file();
+
+    pose_target_file = root_dir + "/Log/target_path.txt";
+    ofstream of_beg(pose_target_file);
+    of_beg.close();
 
     /*** ROS subscribe initialization ***/
     ros::Subscriber sub_pcl = p_pre->lidar_type == AVIA ? \
@@ -1069,5 +1152,7 @@ int main(int argc, char** argv)
     }
     fout_out.close();
     fout_imu_pbp.close();
+
+    saveTraj();
     return 0;
 }
