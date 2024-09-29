@@ -44,6 +44,7 @@ MeasureGroup Measures;
 
 ofstream fout_out, fout_imu_pbp;
 
+extern double lidar_time_offset;
 void readParameters(ros::NodeHandle &nh)
 {
   p_pre.reset(new Preprocess());
@@ -119,6 +120,8 @@ void readParameters(ros::NodeHandle &nh)
     ivox_options_.nearby_type_ = IVoxType::NearbyType::NEARBY18;
   }
     p_imu->gravity_ << VEC_FROM_ARRAY(gravity);
+
+    nh.param<double>("common/lidar_time_offset", lidar_time_offset, 0.0);
 
     // for ground truth target
     nh.param<vector<double>>("ground_truth/extrinsic_T", gt_extrinT, vector<double>());

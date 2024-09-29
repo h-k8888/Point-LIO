@@ -21,13 +21,17 @@ bool lidar_pushed = false, imu_pushed = false;
 std::deque<PointCloudXYZI::Ptr>  lidar_buffer;
 std::deque<double>               time_buffer;
 std::deque<sensor_msgs::Imu::Ptr> imu_deque;
+extern double lidar_time_offset;
+
 
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) 
 {
+    auto time_offset = lidar_time_offset;
+
     // mtx_buffer.lock();
     scan_count ++;
     double preprocess_start_time = omp_get_wtime();
-    if (msg->header.stamp.toSec() < last_timestamp_lidar)
+    if (msg->header.stamp.toSec() + time_offset< last_timestamp_lidar)
     {
         ROS_ERROR("lidar loop back, clear buffer");
         // lidar_buffer.shrink_to_fit();
@@ -37,7 +41,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
         return;
     }
 
-    last_timestamp_lidar = msg->header.stamp.toSec();
+    last_timestamp_lidar = msg->header.stamp.toSec() + time_offset;
     // printf("check lidar time %f\n", last_timestamp_lidar);
     // if (abs(last_timestamp_imu - last_timestamp_lidar) > 1.0 && !timediff_set_flg && !imu_deque.empty()) {
     //     timediff_set_flg = true;
@@ -92,7 +96,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
         if (ptr->points.size() > 0)
         {
             lidar_buffer.emplace_back(ptr);
-            time_buffer.emplace_back(msg->header.stamp.toSec());
+            time_buffer.emplace_back(msg->header.stamp.toSec() + time_offset);
         }
     }
     }

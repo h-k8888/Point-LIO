@@ -53,6 +53,7 @@ M3D gt_R_wrt_IMU(Eye3d);
 string pose_target_file = "/tmp/target_path.txt";
 nav_msgs::Path path_target_end;
 geometry_msgs::PoseStamped msg_target_pose;
+double lidar_time_offset = 0.0;
 
 void SigHandle(int sig)
 {
