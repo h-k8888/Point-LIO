@@ -1,18 +1,18 @@
 common:
-    lid_topic:  "/velodyne_points"
-    imu_topic:  "/handsfree/imu"
+    lid_topic:  "/os1_cloud_node/points"
+    imu_topic:  "/os1_cloud_node/imu"
     con_frame: false # true: if you need to combine several LiDAR frames into one
     con_frame_num: 1 # the number of frames combined
     cut_frame: false # true: if you need to cut one LiDAR frame into several subframes
-    cut_frame_time_interval: 0.1 # should be integral fraction of 1 / LiDAR frequency   
+    cut_frame_time_interval: 0.1 # should be integral fraction of 1 / LiDAR frequency 
     time_diff_lidar_to_imu: 0.0 # Time offset between LiDAR and IMU calibrated by other algorithms, e.g., LI-Init (find in Readme)
-    lidar_time_offset: 0.0      # begin time = lidar timestamp + time offset
+    lidar_time_offset: 0.00      # begin time = lidar timestamp + time offset
 
 preprocess:
-    lidar_type: 2
-    scan_line: 32
-    timestamp_unit: 2           # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
-    blind: 2.0 
+    lidar_type: 3 # 2 #velodyne                # 1 Livox Avia LiDAR
+    scan_line: 64 # 32 #velodyne 6 avia
+    timestamp_unit: 3           # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
+    blind: 2.0
 
 mapping:
     imu_en: true
@@ -25,20 +25,22 @@ mapping:
     lidar_meas_cov: 0.01 # 0.001
     acc_cov_output: 500
     gyr_cov_output: 1000
-    b_acc_cov: 1.1416642385952368e-03
-    b_gyr_cov: 1.4428407712885209e-05
-    imu_meas_acc_cov: 3.7686306102624571e-02 #0.1 # 2
-    imu_meas_omg_cov: 2.3417543020438883e-03 #0.1 # 2
+    b_acc_cov: 0.000106
+    b_gyr_cov: 4e-06
+    imu_meas_acc_cov: 0.1 #0.1 # 2
+    imu_meas_omg_cov: 0.1 #0.1 # 2
     gyr_cov_input: 0.01 # for IMU as input model
     acc_cov_input: 0.1 # for IMU as input model
     plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
     match_s: 81
     ivox_grid_resolution: 0.4
-    gravity: [0.0, 0.0, -9.810] # [-0.30, 0.880, -9.76] # liosam [0.0, 9.810, 0.0] # # preknown gravity, use when imu_en is false or start from a non-stationary state
+    gravity: [0.0, 0.0, -9.810] # preknown gravity, use when imu_en is false or start from a non-stationary state
     gravity_init: [0.0, 0.0, -9.810] # preknown gravity in the initial IMU frame for unstationary start or in the initial LiDAR frame for using without IMU
-    extrinsic_T: [ 0.27255, -0.00053, 0.17954 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
+    extrinsic_T: [-0.006253, 0.011775, -0.028535]     # imu <-- lidar
+    #    extrinsic_q_en: true
+    #    extrinsic_q: [0.0, 0.0, -1.0, 0.0]       #(qx, qy, qz, qw)
+    extrinsic_R: [ -1, 0, 0,
+                   0, -1, 0,
                    0, 0, 1 ]
 
 odometry: 
@@ -53,10 +55,10 @@ pcd_save:
     pcd_save_en: false
     interval: -1                 # how many LiDAR frames saved in each pcd file; 
                                  # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
-# prism or RTK in IMU frame
+
+# Cam0 in IMU frame
 ground_truth:
-    extrinsic_T: [ 0.16, 0.0, 0.84 ]   ## GNSS in IMU frame
-#    extrinsic_T: [ 0.27255, -0.00053, 0.17954]    ## LiDAR in IMU frame
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1 ]
+    extrinsic_T: [ 0.04249269, 0.06466842, -0.01845775 ]
+    extrinsic_R: [ 0.70992163,  0.02460003,  0.70385092,
+                   -0.70414167,  0.00493623,  0.71004236,
+                   0.01399269, -0.99968519,  0.02082624 ]
