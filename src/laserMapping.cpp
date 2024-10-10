@@ -402,7 +402,9 @@ int main(int argc, char** argv)
     readParameters(nh);
     cout<<"lidar_type: "<<lidar_type<<endl;
     ivox_ = std::make_shared<IVoxType>(ivox_options_);
-    
+
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+
     path.header.stamp    = ros::Time().fromSec(lidar_end_time);
     path.header.frame_id ="camera_init";
 
@@ -564,7 +566,7 @@ int main(int argc, char** argv)
             
             /*** downsample the feature points in a scan ***/
             t1 = omp_get_wtime();
-            p_imu->Process(Measures, feats_undistort);
+            p_imu->Process(Measures, feats_undistort); // without undistortion
             if(space_down_sample)
             {
                 downSizeFilterSurf.setInputCloud(feats_undistort);
@@ -577,7 +579,12 @@ int main(int argc, char** argv)
                 sort(feats_down_body->points.begin(), feats_down_body->points.end(), time_list); 
             }
             {
-                time_seq = time_compressing<int>(feats_down_body);
+                // cluster points within 1 ms
+                time_seq = time_compressing<int>(feats_down_body); // number of points inside each cluster
+                // ROS_DEBUG("time_seq:" );
+                // for (int s = 0; s < time_seq.size(); ++s)
+                //     cout << time_seq[s] << " ";
+                // cout << endl;
                 feats_down_size = feats_down_body->points.size();
             }
 
@@ -663,13 +670,13 @@ int main(int argc, char** argv)
                 // }
                 // else
                 {
-                    point_this = Lidar_R_wrt_IMU * point_this + Lidar_T_wrt_IMU;
+                    point_this = Lidar_R_wrt_IMU * point_this + Lidar_T_wrt_IMU; // pt in IMU frame
                     M3D point_crossmat;
-                    point_crossmat << SKEW_SYM_MATRX(point_this);
+                    point_crossmat << SKEW_SYM_MATRX(point_this); // p^ in the IMU frame
                     crossmat_list[i]=point_crossmat;
                 }
             }
-            if (!use_imu_as_input)
+            if (!use_imu_as_input) // use imu as observation?
             {     
                 bool imu_upda_cov = false;
                 effct_feat_num = 0;
@@ -678,7 +685,7 @@ int main(int argc, char** argv)
                 {
                 double pcl_beg_time = Measures.lidar_beg_time;
                 idx = -1;
-                for (k = 0; k < time_seq.size(); k++)
+                for (k = 0; k < time_seq.size(); k++) // FOR according to points cluster by timestamp
                 {
                     PointType &point_body  = feats_down_body->points[idx+time_seq[k]];
 
@@ -688,6 +695,8 @@ int main(int argc, char** argv)
                     {
                         if(imu_en)
                         {
+                            // find the imu later than this point
+                            // time: imu last ---- time_current ---- imu next --->>
                             while (time_current > imu_next.header.stamp.toSec())
                             {
                                 imu_deque.pop_front();
@@ -705,7 +714,10 @@ int main(int argc, char** argv)
                     }
                     if(imu_en && !imu_deque.empty())
                     {
+                        // the very last IMU
                         bool last_imu = imu_next.header.stamp.toSec() == imu_deque.front()->header.stamp.toSec();
+                        // find the imu later than this point
+                        // time: imu last ---- time_predict_last_const ---- imu next --->>
                         while (imu_next.header.stamp.toSec() < time_predict_last_const && !imu_deque.empty())
                         {
                             if (!last_imu)
@@ -722,6 +734,8 @@ int main(int argc, char** argv)
                                 imu_next = *(imu_deque.front());
                             }
                         }
+                        // time_current later than imu_next
+                        // time: time_predict_last_const --> imu_next --> time_current -->, predict
                         bool imu_comes = time_current > imu_next.header.stamp.toSec();
                         while (imu_comes) 
                         {
@@ -730,23 +744,23 @@ int main(int argc, char** argv)
                             acc_avr   <<imu_next.linear_acceleration.x, imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
 
                             /*** covariance update ***/
-                            double dt = imu_next.header.stamp.toSec() - time_predict_last_const;
-                            kf_output.predict(dt, Q_output, input_in, true, false);
+                            double dt = imu_next.header.stamp.toSec() - time_predict_last_const; // time diff for prediction
+                            kf_output.predict(dt, Q_output, input_in, true, false); // predict pose only
                             time_predict_last_const = imu_next.header.stamp.toSec(); // big problem
                             
                             {
-                                double dt_cov = imu_next.header.stamp.toSec() - time_update_last; 
+                                double dt_cov = imu_next.header.stamp.toSec() - time_update_last;  // time diff for cov propagation
 
                                 if (dt_cov > 0.0)
                                 {
                                     time_update_last = imu_next.header.stamp.toSec();
                                     double propag_imu_start = omp_get_wtime();
 
-                                    kf_output.predict(dt_cov, Q_output, input_in, false, true);
+                                    kf_output.predict(dt_cov, Q_output, input_in, false, true); // propagate cov only
 
                                     propag_time += omp_get_wtime() - propag_imu_start;
                                     double solve_imu_start = omp_get_wtime();
-                                    kf_output.update_iterated_dyn_share_IMU();
+                                    kf_output.update_iterated_dyn_share_IMU(); // update with imu observation?
                                     solve_time += omp_get_wtime() - solve_imu_start;
                                 }
                             }
@@ -764,16 +778,16 @@ int main(int argc, char** argv)
 
                     double dt = time_current - time_predict_last_const;
                     double propag_state_start = omp_get_wtime();
-                    if(!prop_at_freq_of_imu)
+                    if(!prop_at_freq_of_imu) //prop_at_freq_of points?
                     {
                         double dt_cov = time_current - time_update_last;
                         if (dt_cov > 0.0)
                         {
-                            kf_output.predict(dt_cov, Q_output, input_in, false, true);
+                            kf_output.predict(dt_cov, Q_output, input_in, false, true); // propagate cov to current
                             time_update_last = time_current;   
                         }
                     }
-                    kf_output.predict(dt, Q_output, input_in, true, false);
+                    kf_output.predict(dt, Q_output, input_in, true, false); // predict state to current time
                     propag_time += omp_get_wtime() - propag_state_start;
                     time_predict_last_const = time_current;
                     double t_update_start = omp_get_wtime();

@@ -301,6 +301,8 @@ Preprocess::process_cut_frame_pcl2(const sensor_msgs::PointCloud2::ConstPtr &msg
         pcl_cut.push_back(pl_surf[i]);
 
         if (valid_num == (int((cut_num + 1) * valid_pcl_size / required_cut_num) - 1)) {
+            // ROS_WARN("required_cut_num: %d", required_cut_num);
+            // ROS_WARN("last_frame_end_time: %f", last_frame_end_time);
             cut_num++;
             time_lidar.push_back(last_frame_end_time);
             PointCloudXYZI::Ptr pcl_temp(new PointCloudXYZI());
